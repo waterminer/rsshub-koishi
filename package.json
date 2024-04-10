@@ -1,0 +1,22 @@
+{
+  "name": "koishi-plugin-rsshub-koishi",
+  "description": "一个基于rsshub的rss订阅/推送插件",
+  "version": "0.0.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "license": "MIT",
+  "scripts": {},
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin"
+  ],
+  "devDependencies": {},
+  "peerDependencies": {
+    "koishi": "^4.17.4"
+  }
+}
