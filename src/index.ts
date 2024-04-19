@@ -135,27 +135,20 @@ export function apply(ctx: Context, config: Config) {
     return "删除取消"
   })
 
-  // ctx.command('rss/rsschannel.edit <id:number> <guildId:text>')
-  //   .alias('rss/rsschannel.编辑')
-  //   .action(async ({ session }, id, guildId) => {
-  //     if (!id || !guildId) return "指令错误"
-  //     const sqlResult = await ctx.database.get('RssChannel', id)
-  //     if (sqlResult.length == 0) return "频道不存在，请检查输入！"
-  //     const channel = sqlResult.pop();
-  //     const ui = new UI(session);
-  //     let deliver: Deliver = ui.getDeliver(guildId).filter()
-  //     // ctx.database.set('RssChannel', id, {
-  //     //   deliver: deliver
-  //     // });
-  //     logger.info(deliver)
-  //     return "修改完成！"
-  //   })
-  // ctx.command('rsstest').action(async ({ session }) => {
-  //   let deliver:Deliver = [{"platform":"red","guildId":"636881768"}]
-  //   ctx.database.set('RssChannel', 1, {
-  //     deliver:deliver
-  //   });
-  // })
+  ctx.command('rss/rsschannel.edit <id:number> <guildId:text>')
+    .alias('rss/rsschannel.编辑')
+    .action(async ({ session }, id, guildId) => {
+      if (!id || !guildId) return "指令错误"
+      const sqlResult = await ctx.database.get('RssChannel', id)
+      if (sqlResult.length == 0) return "频道不存在，请检查输入！"
+      const channel = sqlResult.pop();
+      const ui = new UI(session);
+      let deliver: Deliver = ui.getDeliver(guildId);
+      ctx.database.set('RssChannel', id, {
+        deliver: deliver
+      });
+      return "修改完成！"
+    })
 
   ctx.timer.setInterval(broadcastNews, config.Cycle)
 
