@@ -65,18 +65,18 @@ export function checkUrl(url: string): string {
     throw new Error('inputErr');
 }
 
-export async function newDownloadText(ctx:Context,url:string) {
+export async function newDownloadText(ctx: Context, url: string) {
     const decoder = new TextDecoder('utf-8');
     return decoder.decode(await ctx.http.get(url))
 }
 
 export async function koishiDownloadJson(ctx: Context, url: string) {
-    let XMLDoc = await newDownloadText(ctx,url)
-    return JSON.parse(xmlConvert.xml2json(XMLDoc,{ compact: true }))
+    let XMLDoc = await newDownloadText(ctx, url)
+    return JSON.parse(xmlConvert.xml2json(XMLDoc, { compact: true }))
 }
 
-export async function newDownloadImage(ctx:Context,url:string) {
-    let binary:ArrayBuffer = await ctx.http.get(url)
+export async function newDownloadImage(ctx: Context, url: string) {
+    let binary: ArrayBuffer = await ctx.http.get(url)
     return new Blob([binary])
 }
 

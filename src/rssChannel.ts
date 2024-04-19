@@ -41,14 +41,14 @@ abstract class ChannelFactory {
     async getRssTitle(url: string): Promise<string> {
         const jsonDoc = await this.checkUrl(url);
         const title = jsonDoc.rss.channel.title
-        if(title._cdata) return jsonDoc.rss.channel.title._cdata;
-        if(title._text) return jsonDoc.rss.channel.title._text;
+        if (title._cdata) return jsonDoc.rss.channel.title._cdata;
+        if (title._text) return jsonDoc.rss.channel.title._text;
     }
 
     async checkUrl(url: string) {
-        const jsonDoc = (await connect.koishiDownloadJson(this.ctx,url));
+        const jsonDoc = (await connect.koishiDownloadJson(this.ctx, url));
         if (!jsonDoc.rss) throw new Error('这不是一个有效的rss订阅链接');
-        return jsonDoc; 
+        return jsonDoc;
     }
 }
 
