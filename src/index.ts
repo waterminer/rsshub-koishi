@@ -1,8 +1,8 @@
-import { Context, Schema, Session, h as koshih } from 'koishi';
+import { Context, Schema, Session } from 'koishi';
 import { } from 'koishi-plugin-puppeteer';
-import { CustomizeChannelArgs, RssChannel, RssChannelArgs, RssChannelType, factoryBuilder, Deliver } from './rssChannel';
+import { RssChannel, RssChannelType, factoryBuilder, Deliver } from './rssChannel';
 import { RssItem, RawRssItem, CreateRssItem } from './rssItem';
-import connect, { enumToList } from './lib';
+import lib from './lib';
 
 export const name = 'rsshub-koishi'
 
@@ -18,16 +18,19 @@ declare module 'koishi' {
 export interface Config {
   RssHubServerUrl: string,
   TimeOut: number,
+  Cycle: number
 }
 
 export const Config: Schema<Config> = Schema.object({
   RssHubServerUrl: Schema.string().default('http://rsshub.app').description('RssHub服务地址'),
-  TimeOut: Schema.number().default(10000).description('输入超时时间(ms)'),
+  TimeOut: Schema.number().default(60000).description('输入超时时间(ms)'),
+  Cycle: Schema.number().default(60000).description('订阅更新周期时间(ms)'),
 })
 
 export function apply(ctx: Context, config: Config) {
+  const rsshubServerUrl = lib.checkUrl(config.RssHubServerUrl);
   let channelList: RssChannel[];
-  let logger = ctx.logger('rsshub');
+  const logger = ctx.logger('rsshub');
   ctx.model.extend('RssChannel', {
     id: 'integer',
     type: 'integer',
@@ -42,41 +45,119 @@ export function apply(ctx: Context, config: Config) {
 
   ctx.model.extend('RssItem', {
     id: 'integer',
-    cid:'integer',
-    title:'string',
-    description:'string',
-    guid:'string',
-    link:'string',
-    pubDate:'date',
-    category:'list'
+    cid: 'integer',
+    title: 'string',
+    description: 'string',
+    guid: 'string',
+    link: 'string',
+    pubDate: 'date',
+    category: 'list'
   }, {
     primary: 'id',
     autoInc: true,
-    foreign:{
-      cid:['RssChannel','id']
+    foreign: {
+      cid: ['RssChannel', 'id']
     }
   });
 
-  ctx.command('rss.subscribe <url:text> [guildId:text]').alias('rss.订阅').action(async ({ session }, url, guildId) => {
+  ctx.command('rss/rsschannel.subscribe [guildId:text]')
+    .alias('rss.subscribe')
+    .alias('rss.订阅')
+    .alias('rss.dy')
+    .action(async ({ session }, guildId) => {
+      try {
+        const ui = new UI(session)
+        const deliver: Deliver = ui.getDeliver(guildId);
+        const type = await ui.queryType()
+        const channel = await subscribeRssChannel(session, type, deliver);
+        session.send(`频道${channel.title}订阅成功！\n请问需要立刻发送该频道最新的5条信息吗？\n1.是\n2.否`);
+        let value = await ui.checkMenuInput(2, 1);
+        let message = "";
+        const items = await createRssItemList(channel);
+        switch (value) {
+          case 1: {
+            if (items.length <= 5) {
+              message = await spliceRssItems(items)
+            } else {
+              message = await spliceRssItems(items.splice(0, 5))
+            }
+            break;
+          } case 2: {
+            message = "取消输出";
+            break;
+          }
+          default:
+            message = "输入错误,取消输出";
+            break;
+        }
+        return message;
+      } catch (error) {
+        logger.error(error);
+      }
+      return '订阅失败';
+    })
+
+  ctx.command('rss/rssitem.get <id:number>').alias('rss.查看').action(async ({ session }, id) => {
     try {
-      const deliver: Deliver = new UI(session).getDeliver(guildId);
-      const channel = await subscribeRssChannel(url, RssChannelType.customize, new CustomizeChannelArgs(), deliver);
-      return `频道${channel.title}订阅成功！`;
+      if (!id) {
+        return "指令错误,请输入条目ID(如:rss getitem 1)";
+      }
+      const items: RssItem[] = (await ctx.database.get('RssItem', id));
+      if (!items) return '没有找到对应的条目，请检查输入';
+      return spliceRssItems(items);
     } catch (error) {
-      logger.error(error) ;
+      logger.error(error)
     }
-    return '订阅失败';
   })
 
-  ctx.command('rss.getitem <id:text>').alias('rss.查看').action(async({session},id)=>{
-
+  ctx.command('rss/rsschannel.list').alias('rss/rsschannel.列表').action(() => {
+    const list = channelList.map(channel => {
+      return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`
+    })
+    const text = `<p>频道列表</p><table border=0><tr><td>序号</td><td>标题</td></tr>${list.join("")}</table>`
+    logger.info(list.join(""))
+    return render(text, 250)
   })
 
-  ctx.command('rsstest').action(async ({ session }) => {
-    const rssItems = await checkForUpdates();
-    const res = await Promise.all(rssItems.map(rssItem=>rssDiv(rssItem)));
-    if (res.length) session.send(await render(res.join(),450));
+  ctx.command('rss/rsschannel.remove <id:number>').alias('rss/rsschannel.删除').action(async ({ session }, id) => {
+    if (!id) return "指令错误,请输入频道ID"
+    const sqlResult = await ctx.database.get('RssChannel', id)
+    if (sqlResult.length == 0) return "频道不存在，请检查输入！"
+    const channel = sqlResult.pop()
+    session.send(`是否永久删除“${channel.title}”?此操作不可逆哦!\n确认请回复“确认”，输入其他或超时则取消`)
+    try {
+      let value = await session.prompt(config.TimeOut)
+      if (value === "确认") {
+        ctx.database.remove('RssChannel', id)
+        return `“${channel.title}”删除成功！`
+      }
+    } catch (error) { }
+    return "删除取消"
   })
+
+  // ctx.command('rss/rsschannel.edit <id:number> <guildId:text>')
+  //   .alias('rss/rsschannel.编辑')
+  //   .action(async ({ session }, id, guildId) => {
+  //     if (!id || !guildId) return "指令错误"
+  //     const sqlResult = await ctx.database.get('RssChannel', id)
+  //     if (sqlResult.length == 0) return "频道不存在，请检查输入！"
+  //     const channel = sqlResult.pop();
+  //     const ui = new UI(session);
+  //     let deliver: Deliver = ui.getDeliver(guildId).filter()
+  //     // ctx.database.set('RssChannel', id, {
+  //     //   deliver: deliver
+  //     // });
+  //     logger.info(deliver)
+  //     return "修改完成！"
+  //   })
+  // ctx.command('rsstest').action(async ({ session }) => {
+  //   let deliver:Deliver = [{"platform":"red","guildId":"636881768"}]
+  //   ctx.database.set('RssChannel', 1, {
+  //     deliver:deliver
+  //   });
+  // })
+
+  ctx.timer.setInterval(broadcastNews, config.Cycle)
 
   ctx.on('ready', async () => {
     let listFromDatabase = await ctx.database.get('RssChannel', {});
@@ -84,6 +165,29 @@ export function apply(ctx: Context, config: Config) {
     logger.info(`从数据库中加载了${listFromDatabase.length}个频道`);
   })
 
+  function broadcast(deliver: Deliver, message: string) {
+    const temp = deliver.map(
+      element => `${element.platform}:${element.guildId}`
+    )
+    ctx.broadcast(temp, message)
+  }
+  async function spliceRssItems(rssItems: RssItem[]) {
+    const temp = (await Promise.all(rssItems.map(item => rssDiv(item)))).join("");
+    return render(temp, 480);
+  }
+  async function broadcastNews() {
+    const NewsItems = await checkForUpdates();
+    if (!NewsItems) return;
+    const groups = await Promise.all(NewsItems.map(async (element) => {
+      const deliver = element.channel.deliver;
+      const message = await spliceRssItems(element.items);
+      return { deliver: deliver, message: message }
+    }))
+    groups.forEach(group => {
+      broadcast(group.deliver, group.message)
+    })
+    return;
+  }
   //交互代码
   class UI {
     session: Session;
@@ -103,9 +207,9 @@ export function apply(ctx: Context, config: Config) {
       return deliver
     }
 
-    async checkMenuInput(max: number): Promise<number> {
+    async checkMenuInput(max: number, min: number = 0): Promise<number> {
       const value: string = await this.session.prompt(config.TimeOut);
-      if (!isNaN(Number(value)) && Number(value) <= max && Number(value) >= 0) {
+      if (!isNaN(Number(value)) && Number(value) <= max && Number(value) >= min) {
         return Number(value);
       }
       throw new Error('inputErr');
@@ -113,24 +217,16 @@ export function apply(ctx: Context, config: Config) {
 
     async checkUrlInput(): Promise<string> {
       const url: string = await this.session.prompt(config.TimeOut);
-      const rule = /^((http:\/\/)|(https:\/\/))?((www\.)|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|(localhost))\S*/g;
-      let res = rule.exec(url);
-      if (res) {
-        if (!res[1]) {
-          return 'http://' + res[0];
-        }
-        return res[0];
-      }
-      throw new Error('inputErr');
+      return lib.checkUrl(url)
     }
 
-    async queryType() {
-      const typeMenu = enumToList(RssChannelType);
+    async queryType(): Promise<number> {
+      const typeMenu = lib.enumToList(RssChannelType);
       const max = typeMenu.length - 1;
       this.session.send(
         `频道订阅向导\n请输入你订阅的频道类型[0~${typeMenu.length - 1}]:\n${typeMenu.join('\n')}`
       );
-      const value = await this.checkMenuInput(max);
+      return await this.checkMenuInput(max);
     }
 
     async queryUrl() {
@@ -139,13 +235,13 @@ export function apply(ctx: Context, config: Config) {
     }
 
   }
-  async function rssDiv(rssItem:RssItem) {
+  async function rssDiv(rssItem: RssItem) {
     const channel = `<h2>#${rssItem.id}:${(await getChannelFromItem(rssItem)).title}</h2>`;
     const title = `<h3>${rssItem.title}</h3>`;
     const description = rssItem.description;
     return `<div>${channel}${title}${description}</div>`;
   }
-  async function render(content:string, picWidth:number) {
+  async function render(content: string, picWidth: number) {
     // https://github.com/ifrvn/koishi-plugin-send-as-image
     return ctx.puppeteer.render(`<html>
 <head>
@@ -177,19 +273,19 @@ export function apply(ctx: Context, config: Config) {
 </html>`);
   }
   //业务代码
-  let cachs=new Map<number,RssChannel>();
-  async function getChannelFromItem(rssItem:RssItem):Promise<RssChannel> {
+  let caches = new Map<number, RssChannel>();
+  async function getChannelFromItem(rssItem: RssItem): Promise<RssChannel> {
     let id = rssItem.cid
-    if (cachs.has(id)){
-      return cachs.get(id);
+    if (caches.has(id)) {
+      return caches.get(id);
     }
-    const res = (await ctx.database.get('RssChannel',id)).pop();
-    cachs.set(id,res);
+    const res = (await ctx.database.get('RssChannel', id)).pop();
+    caches.set(id, res);
     return res;
   }
 
-  async function createRssItemList(channel: RssChannel) {
-    const jsonObject = await connect.downloadToJson(channel.url)
+  async function createRssItemList(channel: RssChannel): Promise<RssItem[]> {
+    const jsonObject = await lib.koishiDownloadJson(ctx, channel.url)
     const items: RawRssItem[] = jsonObject.rss.channel.item;
     const newItems: RawRssItem[] = [];
     for (const item of items) {
@@ -198,21 +294,24 @@ export function apply(ctx: Context, config: Config) {
         newItems.push(item);
       }
     }
-    logger.info(`更新了${newItems.length}个频道！`)
+    logger.info(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`)
     return Promise.all(newItems.map(item => CreateRssItem(ctx, item, channel)))
   }
 
-  async function subscribeRssChannel(baseUrl: string, type: RssChannelType, args: RssChannelArgs, deliver: Deliver): Promise<RssChannel> {
-    const channel = await factoryBuilder(ctx, type).createChannel(baseUrl, args, deliver);
+  async function subscribeRssChannel(session: Session, type: RssChannelType, deliver: Deliver): Promise<RssChannel> {
+    const channelFactory = factoryBuilder(ctx, type);
+    const args = await channelFactory.printMenu(session, config.TimeOut);
+    const channel = await channelFactory.createChannel(rsshubServerUrl, args, deliver)
     channelList.push(channel);
     return channel
   }
 
-  async function checkForUpdates(): Promise<RssItem[]> {
+  async function checkForUpdates(): Promise<{ channel: RssChannel, items: RssItem[] }[]> {
     logger.info('开始更新')
-    const promises: Promise<RssItem[]>[] = channelList.map(
-      channel => createRssItemList(channel)
-    );
-    return (await Promise.all(promises)).reduce((acc, items) => acc.concat(items), [])
+    let res = await Promise.all(channelList.map(async (channel: RssChannel) => {
+      const items = await createRssItemList(channel)
+      return { channel, items }
+    }))
+    return res.filter(element => element.items.length != 0)
   }
 }
