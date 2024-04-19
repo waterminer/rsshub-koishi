@@ -22,10 +22,10 @@ export interface Config {
 }
 
 export const Config: Schema<Config> = Schema.object({
-  RssHubServerUrl: Schema.string().default('http://rsshub.app').description('RssHub服务地址'),
+  RssHubServerUrl: Schema.string().default('http://rsshub.app').description('RssHub服务地址(若是在中国大陆使用，推荐换源或是自建)'),
   TimeOut: Schema.number().default(60000).description('输入超时时间(ms)'),
   Cycle: Schema.number().default(60000).description('订阅更新周期时间(ms)'),
-})
+});
 
 export function apply(ctx: Context, config: Config) {
   const rsshubServerUrl = lib.checkUrl(config.RssHubServerUrl);
@@ -60,15 +60,18 @@ export function apply(ctx: Context, config: Config) {
     }
   });
 
-  ctx.command('rss/rsschannel.subscribe [guildId:text]')
+  ctx.command('rss/rsschannel.subscribe [guildId:text]','订阅频道')
     .alias('rss.subscribe')
     .alias('rss.订阅')
     .alias('rss.dy')
+    .option('[guildId:text]','设定推送的群')
+    .usage('默认包含发送订阅指令的当前群\n以逗号间隔群号')
+    .example('rsschannel subscribe 12345,54321')
     .action(async ({ session }, guildId) => {
       try {
         const ui = new UI(session)
         const deliver: Deliver = ui.getDeliver(guildId);
-        const type = await ui.queryType()
+        const type = await ui.queryType();
         const channel = await subscribeRssChannel(session, type, deliver);
         session.send(`频道${channel.title}订阅成功！\n请问需要立刻发送该频道最新的5条信息吗？\n1.是\n2.否`);
         let value = await ui.checkMenuInput(2, 1);
@@ -77,9 +80,9 @@ export function apply(ctx: Context, config: Config) {
         switch (value) {
           case 1: {
             if (items.length <= 5) {
-              message = await spliceRssItems(items)
+              message = await spliceRssItems(items);
             } else {
-              message = await spliceRssItems(items.splice(0, 5))
+              message = await spliceRssItems(items.splice(0, 5));
             }
             break;
           } case 2: {
@@ -95,7 +98,7 @@ export function apply(ctx: Context, config: Config) {
         logger.error(error);
       }
       return '订阅失败';
-    })
+    });
 
   ctx.command('rss/rssitem.get <id:number>').alias('rss.查看').action(async ({ session }, id) => {
     try {
@@ -106,49 +109,48 @@ export function apply(ctx: Context, config: Config) {
       if (!items) return '没有找到对应的条目，请检查输入';
       return spliceRssItems(items);
     } catch (error) {
-      logger.error(error)
+      logger.error(error);
     }
-  })
+  });
 
   ctx.command('rss/rsschannel.list').alias('rss/rsschannel.列表').action(() => {
     const list = channelList.map(channel => {
-      return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`
+      return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`;
     })
-    const text = `<p>频道列表</p><table border=0><tr><td>序号</td><td>标题</td></tr>${list.join("")}</table>`
-    logger.info(list.join(""))
-    return render(text, 250)
-  })
+    const text = `<p>频道列表</p><table border=0><tr><td>序号</td><td>标题</td></tr>${list.join("")}</table>`;
+    return render(text, 250);
+  });
 
   ctx.command('rss/rsschannel.remove <id:number>').alias('rss/rsschannel.删除').action(async ({ session }, id) => {
-    if (!id) return "指令错误,请输入频道ID"
-    const sqlResult = await ctx.database.get('RssChannel', id)
-    if (sqlResult.length == 0) return "频道不存在，请检查输入！"
-    const channel = sqlResult.pop()
-    session.send(`是否永久删除“${channel.title}”?此操作不可逆哦!\n确认请回复“确认”，输入其他或超时则取消`)
+    if (!id) return "指令错误,请输入频道ID";
+    const sqlResult = await ctx.database.get('RssChannel', id);
+    if (sqlResult.length == 0) return "频道不存在，请检查输入！";
+    const channel = sqlResult.pop();
+    session.send(`是否永久删除“${channel.title}”?此操作不可逆哦!\n确认请回复“确认”，输入其他或超时则取消`);
     try {
-      let value = await session.prompt(config.TimeOut)
+      let value = await session.prompt(config.TimeOut);
       if (value === "确认") {
-        ctx.database.remove('RssChannel', id)
-        return `“${channel.title}”删除成功！`
+        ctx.database.remove('RssChannel', id);
+        return `“${channel.title}”删除成功！`;
       }
     } catch (error) { }
-    return "删除取消"
-  })
+    return "删除取消";
+  });
 
   ctx.command('rss/rsschannel.edit <id:number> <guildId:text>')
     .alias('rss/rsschannel.编辑')
     .action(async ({ session }, id, guildId) => {
-      if (!id || !guildId) return "指令错误"
-      const sqlResult = await ctx.database.get('RssChannel', id)
-      if (sqlResult.length == 0) return "频道不存在，请检查输入！"
+      if (!id || !guildId) return "指令错误";
+      const sqlResult = await ctx.database.get('RssChannel', id);
+      if (sqlResult.length == 0) return "频道不存在，请检查输入！";
       const channel = sqlResult.pop();
       const ui = new UI(session);
       let deliver: Deliver = ui.getDeliver(guildId);
       ctx.database.set('RssChannel', id, {
         deliver: deliver
       });
-      return "修改完成！"
-    })
+      return "修改完成！";
+    });
 
   ctx.timer.setInterval(broadcastNews, config.Cycle)
 
@@ -161,8 +163,8 @@ export function apply(ctx: Context, config: Config) {
   function broadcast(deliver: Deliver, message: string) {
     const temp = deliver.map(
       element => `${element.platform}:${element.guildId}`
-    )
-    ctx.broadcast(temp, message)
+    );
+    ctx.broadcast(temp, message);
   }
   async function spliceRssItems(rssItems: RssItem[]) {
     const temp = (await Promise.all(rssItems.map(item => rssDiv(item)))).join("");
@@ -287,24 +289,24 @@ export function apply(ctx: Context, config: Config) {
         newItems.push(item);
       }
     }
-    logger.info(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`)
-    return Promise.all(newItems.map(item => CreateRssItem(ctx, item, channel)))
+    logger.info(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`);
+    return Promise.all(newItems.map(item => CreateRssItem(ctx, item, channel)));
   }
 
   async function subscribeRssChannel(session: Session, type: RssChannelType, deliver: Deliver): Promise<RssChannel> {
     const channelFactory = factoryBuilder(ctx, type);
     const args = await channelFactory.printMenu(session, config.TimeOut);
-    const channel = await channelFactory.createChannel(rsshubServerUrl, args, deliver)
+    const channel = await channelFactory.createChannel(rsshubServerUrl, args, deliver);
     channelList.push(channel);
-    return channel
+    return channel;
   }
 
   async function checkForUpdates(): Promise<{ channel: RssChannel, items: RssItem[] }[]> {
-    logger.info('开始更新')
+    logger.info('开始更新');
     let res = await Promise.all(channelList.map(async (channel: RssChannel) => {
-      const items = await createRssItemList(channel)
-      return { channel, items }
+      const items = await createRssItemList(channel);
+      return { channel, items };
     }))
-    return res.filter(element => element.items.length != 0)
+    return res.filter(element => element.items.length != 0);
   }
 }

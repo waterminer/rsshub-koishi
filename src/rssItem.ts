@@ -44,7 +44,7 @@ export async function CreateRssItem(ctx: Context, item: RawRssItem, channel: Rss
             link: item.link._text,
             pubDate: new Date(item.pubDate._text),
             category: category
-        })
+        });
     } catch (error) {
         throw new Error(`创建频道失败:${error}`);
     }

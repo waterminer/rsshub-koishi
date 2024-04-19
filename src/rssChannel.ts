@@ -9,7 +9,7 @@ export type Deliver = { platform: string, guildId: string }[]
 
 export const EXTRACTRULE: Map<RssChannelType, RegExp> = new Map<RssChannelType, RegExp>([
     [RssChannelType.pixiv, /<img src="(.+?(\.png|\.jpg|\.gif))"/g]
-])
+]);
 
 export interface RssChannel {
     id: number;
@@ -34,13 +34,13 @@ class PixivChannelArgs implements RssChannelArgs {
 abstract class ChannelFactory {
     ctx: Context;
     constructor(ctx: Context) {
-        this.ctx = ctx
+        this.ctx = ctx;
     }
     abstract createChannel(url: string, args: RssChannelArgs, deliver: Deliver): Promise<RssChannel>;
     abstract printMenu(session: Session, TimeOut: number): Promise<RssChannelArgs>;
     async getRssTitle(url: string): Promise<string> {
         const jsonDoc = await this.checkUrl(url);
-        const title = jsonDoc.rss.channel.title
+        const title = jsonDoc.rss.channel.title;
         if (title._cdata) return jsonDoc.rss.channel.title._cdata;
         if (title._text) return jsonDoc.rss.channel.title._text;
     }
@@ -79,14 +79,15 @@ class PixivChannelFactory extends ChannelFactory {
         "user_bookmark",
         "keyword",
         "rankings",
-        "following_timeline"];
+        "following_timeline"
+    ];
     readonly RANKLIST: ReadonlyArray<string> = [
         "day",
         "weak",
         "month"
-    ]
+    ];
     constructor(ctx: Context) {
-        super(ctx)
+        super(ctx);
     }
     private _checkInput(value: unknown) {
         if (!value) throw new Error(`Error Parameters:(${value})`);
@@ -102,10 +103,10 @@ class PixivChannelFactory extends ChannelFactory {
         let args = new PixivChannelArgs()
         let typeMap = new Map<number, string>(
             this.TYPELIST.map((element, index) => [index + 1, element])
-        )
+        );
         let modeMap = new Map<number, string>(
             this.RANKLIST.map((element, index) => [index + 1, element])
-        )
+        );
         session.send(`请选择类型:\n1.用户动态\n2.用户收藏\n3.关键词\n4.排行榜`);
         let value = await checkMenuInput(this.TYPELIST.length);
         args.type = typeMap.get(value)
@@ -121,10 +122,12 @@ class PixivChannelFactory extends ChannelFactory {
             } case 3: {
                 session.send('请输入关键词');
                 args.keyword = await session.prompt(timeOut);
+                break;
             } case 4: {
                 session.send('请输入排行榜类型:\n1.日榜\n2.周榜\n3.月榜');
                 const value = await checkMenuInput(this.RANKLIST.length);
                 args.mode = modeMap.get(value);
+                break;
             } default:
                 throw new Error('inputErr');
         }

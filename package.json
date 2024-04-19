@@ -11,6 +11,7 @@
   "contributors": [
     "Waterminer <420773173@qq.com>"
   ],
+  "homepage":"https://github.com/waterminer/rsshub-koishi",
   "license": "MIT",
   "repository": {
     "type": "git",

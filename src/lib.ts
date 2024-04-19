@@ -27,7 +27,7 @@ async function downloadImg(url: string): Promise<Blob> {
     try {
         return (await tryFetch(fetch(url))).blob();
     } catch (error) {
-        if (error instanceof Error) console.error(`download ${url} Error!\n${error.message}`)
+        if (error instanceof Error) console.error(`download ${url} Error!\n${error.message}`);
     }
 }
 
@@ -35,7 +35,7 @@ async function downloadText(url: string): Promise<string> {
     try {
         return (await tryFetch(fetch(url))).text();
     } catch (error) {
-        if (error instanceof Error) console.error(`download ${url} Error!\n${error.message}`)
+        if (error instanceof Error) console.error(`download ${url} Error!\n${error.message}`);
     }
 }
 
@@ -67,17 +67,17 @@ export function checkUrl(url: string): string {
 
 export async function newDownloadText(ctx: Context, url: string) {
     const decoder = new TextDecoder('utf-8');
-    return decoder.decode(await ctx.http.get(url))
+    return decoder.decode(await ctx.http.get(url));
 }
 
 export async function koishiDownloadJson(ctx: Context, url: string) {
-    let XMLDoc = await newDownloadText(ctx, url)
-    return JSON.parse(xmlConvert.xml2json(XMLDoc, { compact: true }))
+    let XMLDoc = await newDownloadText(ctx, url);
+    return JSON.parse(xmlConvert.xml2json(XMLDoc, { compact: true }));
 }
 
 export async function newDownloadImage(ctx: Context, url: string) {
-    let binary: ArrayBuffer = await ctx.http.get(url)
-    return new Blob([binary])
+    let binary: ArrayBuffer = await ctx.http.get(url);
+    return new Blob([binary]);
 }
 
 export default {
