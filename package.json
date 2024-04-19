@@ -1,25 +1,40 @@
 {
   "name": "koishi-plugin-rsshub-koishi",
   "description": "一个基于rsshub的rss订阅/推送插件",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib",
     "dist"
   ],
+  "contributors": [
+    "Waterminer <420773173@qq.com>"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waterminer/rsshub-koishi"
+  },
   "scripts": {},
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "rss"
   ],
   "peerDependencies": {
     "koishi": "^4.17.4"
   },
   "dependencies": {
-    "koishi-plugin-puppeteer": "^3.8.4",
     "xml-js": "^1.6.11"
+  },
+  "koishi": {
+    "description": {
+      "zh":"一个基于rsshub的rss订阅/推送插件"
+    },
+    "service":["database","puppeteer"],
+    "locales": ["zh"],
+    "preview":true
   }
 }
