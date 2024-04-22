@@ -30,7 +30,7 @@ export const Config: Schema<Config> = Schema.object({
 export function apply(ctx: Context, config: Config) {
   const rsshubServerUrl = lib.checkUrl(config.RssHubServerUrl);
   const mainDoc =
-  `
+    `
 ====rsshub订阅推送插件帮助====
 所属指令
 rssitem 关于rss项目相关的指令
@@ -71,10 +71,10 @@ rss subscribe/rss dy 订阅rss频道
   });
 
   ctx.command('rss')
-  .usage(mainDoc)
-  .action(()=>{
-    return mainDoc;
-  })
+    .usage(mainDoc)
+    .action(() => {
+      return mainDoc;
+    })
 
   ctx.command('rss/rsschannel.subscribe [guildId:text]', '订阅频道')
     .alias('rss.subscribe')
@@ -130,44 +130,43 @@ rss subscribe/rss dy 订阅rss频道
       }
     });
 
-  ctx.command('rss/rssitem.get <id:number>','查看项目')
-  .alias('rss.查看')
-  .action(async ({ session }, id) => {
-    try {
-      if (!id) {
-        return "指令错误,请输入条目ID(如:rss getitem 1)";
+  ctx.command('rss/rssitem.get <id:number>', '查看项目')
+    .alias('rss.查看')
+    .action(async ({ session }, id) => {
+      try {
+        if (!id) {
+          return "指令错误,请输入条目ID(如:rss getitem 1)";
+        }
+        const items: RssItem[] = (await ctx.database.get('RssItem', id));
+        if (!items) return '没有找到对应的条目，请检查输入';
+        return spliceRssItems(items);
+      } catch (error) {
+        logger.error(error);
+        if (error instanceof Error) {
+          return (error.message);
+        } else {
+          return ("未知错误");
+        }
       }
-      const items: RssItem[] = (await ctx.database.get('RssItem', id));
-      if (!items) return '没有找到对应的条目，请检查输入';
-      return spliceRssItems(items);
-    } catch (error) {
-      logger.error(error);
-      if (error instanceof Error)
-      {
-        return(error.message);
-      }else{
-        return("未知错误");
-      }
-    }
-  });
+    });
 
-  ctx.command('rss/rssitem.list <cid:number> [page:number]',"展示某频道下的项目")
+  ctx.command('rss/rssitem.list <cid:number> [page:number]', "展示某频道下的项目")
     .alias('rss/rssitem.列表')
-    .option('old',"-o 按日期从旧到新排序")
+    .option('old', "-o 按日期从旧到新排序")
     .usage("输出内容按每页10条展示,查看更多需要在指令结尾输入页码")
     .example("rssitem list 8 2 --old")
-    .action(async ({ session ,options}, cid, page) => {
+    .action(async ({ session, options }, cid, page) => {
       if (!cid) return "指令错误,请输入频道ID";
       if (!page || page <= 0) page = 1;
-      let orderBy:'asc'|'desc' = 'desc'
+      let orderBy: 'asc' | 'desc' = 'desc'
       if (options.old) orderBy = 'asc'
       const res: RssItem[] = await ctx.database.select('RssItem')
         .where({ cid: cid })
-        .orderBy('pubDate',orderBy)
+        .orderBy('pubDate', orderBy)
         .limit(10)
         .offset(10 * (page - 1))
         .execute();
-      if(res.length == 0)return "找不到项目,请检查输入的频道id或页码"
+      if (res.length == 0) return "找不到项目,请检查输入的频道id或页码"
       const itemText: string = res.map(item =>
         `<tr><td>${item.id}</td><td>${item.title}</td></tr>`
       ).join("");
@@ -175,17 +174,19 @@ rss subscribe/rss dy 订阅rss频道
       return render(text, 250);
     });
 
-  ctx.command('rss/rsschannel.list','展示订阅的频道列表')
-  .alias('rss/rsschannel.列表')
-  .action(() => {
-    const list = channelList.map(channel => {
-      return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`;
-    })
-    const text = `<p>频道列表</p><table border=0><tr><td>序号</td><td>标题</td></tr>${list.join("")}</table>`;
-    return render(text, 250);
-  });
 
-  ctx.command('rss/rsschannel.remove <id:number>',"删除频道及其所属的项目")
+
+  ctx.command('rss/rsschannel.list', '展示订阅的频道列表')
+    .alias('rss/rsschannel.列表')
+    .action(() => {
+      const list = channelList.map(channel => {
+        return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`;
+      })
+      const text = `<p>频道列表</p><table border=0><tr><td>序号</td><td>标题</td></tr>${list.join("")}</table>`;
+      return render(text, 250);
+    });
+
+  ctx.command('rss/rsschannel.remove <id:number>', "删除频道及其所属的项目")
     .alias('rss/rsschannel.删除')
     .action(async ({ session }, id) => {
       if (!id) return "指令错误,请输入频道ID";
@@ -205,8 +206,25 @@ rss subscribe/rss dy 订阅rss频道
       return "删除取消";
     });
 
-  ctx.command('rss/rsschannel.edit <id:number> <guildId:text>', "修改推送目标群")
-    .alias('rss/rsschannel.编辑')
+  ctx.command('rss/rsschannel.deliver <id:number>',"显示频道的推送目标")
+  .alias('rss/rsschannel.推送目标')
+  .action(async ({session},id) => {
+    if(!id) return "指令错误,请输入频道ID";
+    try {
+      const channel = (await ctx.database.get('RssChannel',id)).pop();
+      const res = channel.deliver.map((element)=>`${element.platform}:${element.guildId}`);
+      const text = `推送列表:<br>${res.join("<br>")}`;
+      return render(text,250);
+    } catch (error) {
+      logger.error(error)
+      if(error instanceof Error){
+        return(`错误:\n${error.message}`)
+      }
+    }
+  });
+
+  ctx.command('rss/rsschannel.deliverto <id:number> <guildId:text>', "修改推送目标群")
+    .alias('rss/rsschannel.推送设置')
     .option('no-default', '-d 不包含发送指令的当前群')
     .action(async ({ session, options }, id, guildId) => {
       try {
