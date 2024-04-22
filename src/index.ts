@@ -29,6 +29,16 @@ export const Config: Schema<Config> = Schema.object({
 
 export function apply(ctx: Context, config: Config) {
   const rsshubServerUrl = lib.checkUrl(config.RssHubServerUrl);
+  const mainDoc =
+  `
+====rsshub订阅推送插件帮助====
+所属指令
+rssitem 关于rss项目相关的指令
+rsschannel 关于rss频道相关的指令
+快捷指令
+rss subscribe/rss dy 订阅rss频道
+具体请在各个指令末尾加上 -h查看
+  `;
   let channelList: RssChannel[];
   const logger = ctx.logger('rsshub');
   ctx.model.extend('RssChannel', {
@@ -59,6 +69,12 @@ export function apply(ctx: Context, config: Config) {
       cid: ['RssChannel', 'id']
     }
   });
+
+  ctx.command('rss')
+  .usage(mainDoc)
+  .action(()=>{
+    return mainDoc;
+  })
 
   ctx.command('rss/rsschannel.subscribe [guildId:text]', '订阅频道')
     .alias('rss.subscribe')
@@ -114,7 +130,9 @@ export function apply(ctx: Context, config: Config) {
       }
     });
 
-  ctx.command('rss/rssitem.get <id:number>').alias('rss.查看').action(async ({ session }, id) => {
+  ctx.command('rss/rssitem.get <id:number>','查看项目')
+  .alias('rss.查看')
+  .action(async ({ session }, id) => {
     try {
       if (!id) {
         return "指令错误,请输入条目ID(如:rss getitem 1)";
@@ -133,16 +151,23 @@ export function apply(ctx: Context, config: Config) {
     }
   });
 
-  ctx.command('rss/rssitem.list <cid:number> [page:number]')
+  ctx.command('rss/rssitem.list <cid:number> [page:number]',"展示某频道下的项目")
     .alias('rss/rssitem.列表')
-    .action(async ({ session }, cid, page) => {
+    .option('old',"-o 按日期从旧到新排序")
+    .usage("输出内容按每页10条展示,查看更多需要在指令结尾输入页码")
+    .example("rssitem list 8 2 --old")
+    .action(async ({ session ,options}, cid, page) => {
       if (!cid) return "指令错误,请输入频道ID";
       if (!page || page <= 0) page = 1;
+      let orderBy:'asc'|'desc' = 'desc'
+      if (options.old) orderBy = 'asc'
       const res: RssItem[] = await ctx.database.select('RssItem')
         .where({ cid: cid })
+        .orderBy('pubDate',orderBy)
         .limit(10)
         .offset(10 * (page - 1))
         .execute();
+      if(res.length == 0)return "找不到项目,请检查输入的频道id或页码"
       const itemText: string = res.map(item =>
         `<tr><td>${item.id}</td><td>${item.title}</td></tr>`
       ).join("");
@@ -150,7 +175,9 @@ export function apply(ctx: Context, config: Config) {
       return render(text, 250);
     });
 
-  ctx.command('rss/rsschannel.list').alias('rss/rsschannel.列表').action(() => {
+  ctx.command('rss/rsschannel.list','展示订阅的频道列表')
+  .alias('rss/rsschannel.列表')
+  .action(() => {
     const list = channelList.map(channel => {
       return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`;
     })
@@ -158,7 +185,7 @@ export function apply(ctx: Context, config: Config) {
     return render(text, 250);
   });
 
-  ctx.command('rss/rsschannel.remove <id:number>')
+  ctx.command('rss/rsschannel.remove <id:number>',"删除频道及其所属的项目")
     .alias('rss/rsschannel.删除')
     .action(async ({ session }, id) => {
       if (!id) return "指令错误,请输入频道ID";
