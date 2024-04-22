@@ -76,7 +76,11 @@ export function apply(ctx: Context, config: Config) {
         channel = await subscribeRssChannel(session, type, deliver);
       } catch (error) {
         logger.error(error);
-        return '订阅失败';
+        if (error instanceof Error) {
+          return `订阅失败:\n${error.message}`;
+        } else {
+          return `订阅失败`;
+        }
       }
       try {
         session.send(`频道${channel.title}订阅成功！\n请问需要立刻发送该频道最新的5条信息吗？\n1.是\n2.否`);
@@ -101,11 +105,11 @@ export function apply(ctx: Context, config: Config) {
         }
         return message;
       } catch (error) {
+        logger.error(error);
         if (error instanceof Error) {
-          logger.error(error.message);
-          return (error.message);
+          return (`发送失败:\n${error.message}`);
         } else {
-          logger.error(error);
+          return ("发送失败:未知错误")
         }
       }
     });
@@ -120,6 +124,12 @@ export function apply(ctx: Context, config: Config) {
       return spliceRssItems(items);
     } catch (error) {
       logger.error(error);
+      if (error instanceof Error)
+      {
+        return(error.message);
+      }else{
+        return("未知错误");
+      }
     }
   });
 
@@ -149,24 +159,24 @@ export function apply(ctx: Context, config: Config) {
   });
 
   ctx.command('rss/rsschannel.remove <id:number>')
-  .alias('rss/rsschannel.删除')
-  .action(async ({ session }, id) => {
-    if (!id) return "指令错误,请输入频道ID";
-    const sqlResult = await ctx.database.get('RssChannel', id);
-    if (sqlResult.length == 0) return "频道不存在，请检查输入！";
-    const channel = sqlResult.pop();
-    session.send(`是否永久删除“${channel.title}”?此操作不可逆哦!\n确认请回复“确认”，输入其他或超时则取消`);
-    try {
-      let value = await session.prompt(config.TimeOut);
-      if (value === "确认") {
-        ctx.database.remove('RssItem',{cid:id});
-        ctx.database.remove('RssChannel', id);
-        channelList = await ctx.database.get('RssChannel', {});
-        return `“${channel.title}”删除成功！`;
-      }
-    } catch (error) { }
-    return "删除取消";
-  });
+    .alias('rss/rsschannel.删除')
+    .action(async ({ session }, id) => {
+      if (!id) return "指令错误,请输入频道ID";
+      const sqlResult = await ctx.database.get('RssChannel', id);
+      if (sqlResult.length == 0) return "频道不存在，请检查输入！";
+      const channel = sqlResult.pop();
+      session.send(`是否永久删除“${channel.title}”以及其下所有的项目?此操作不可逆哦!\n确认请回复“确认”,输入其他或超时则取消`);
+      try {
+        let value = await session.prompt(config.TimeOut);
+        if (value === "确认") {
+          ctx.database.remove('RssItem', { cid: id });
+          ctx.database.remove('RssChannel', id);
+          channelList = await ctx.database.get('RssChannel', {});
+          return `“${channel.title}”删除成功！`;
+        }
+      } catch (error) { }
+      return "删除取消";
+    });
 
   ctx.command('rss/rsschannel.edit <id:number> <guildId:text>', "修改推送目标群")
     .alias('rss/rsschannel.编辑')
@@ -251,7 +261,7 @@ export function apply(ctx: Context, config: Config) {
       if (!isNaN(Number(value)) && Number(value) <= max && Number(value) >= min) {
         return Number(value);
       }
-      throw new Error('inputErr');
+      throw new Error('输入错误');
     }
 
     async checkUrlInput(): Promise<string> {
@@ -333,7 +343,7 @@ export function apply(ctx: Context, config: Config) {
         newItems.push(item);
       }
     }
-    logger.info(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`);
+    logger.debug(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`);
     return Promise.all(newItems.map(item => CreateRssItem(ctx, item, channel)));
   }
 
@@ -351,6 +361,8 @@ export function apply(ctx: Context, config: Config) {
       const items = await createRssItemList(channel);
       return { channel, items };
     }))
-    return res.filter(element => element.items.length != 0);
+    res = res.filter(element => element.items.length != 0);
+    logger.info(`更新了${res.length}个频道`)
+    return res;
   }
 }
