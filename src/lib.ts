@@ -62,7 +62,7 @@ export function checkUrl(url: string): string {
         }
         return res[0];
     }
-    throw new Error('inputErr');
+    throw new Error('这不是有效的链接');
 }
 
 export async function newDownloadText(ctx: Context, url: string) {

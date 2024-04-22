@@ -36,8 +36,10 @@ export function apply(ctx: Context, config: Config) {
 rssitem 关于rss项目相关的指令
 rsschannel 关于rss频道相关的指令
 快捷指令
-rss subscribe/rss dy 订阅rss频道
-具体请在各个指令末尾加上 -h查看
+rss 订阅/rss dy 订阅rss频道
+rss 查看/rss get 查看rss项目
+rss 列表/rss list 订阅的频道列表
+更多帮助在各个指令末尾加上 -h查看
   `;
   let channelList: RssChannel[];
   const logger = ctx.logger('rsshub');
@@ -131,7 +133,9 @@ rss subscribe/rss dy 订阅rss频道
     });
 
   ctx.command('rss/rssitem.get <id:number>', '查看项目')
+    .alias('rss/rssitem.查看')
     .alias('rss.查看')
+    .alias('rss.get')
     .action(async ({ session }, id) => {
       try {
         if (!id) {
@@ -178,6 +182,8 @@ rss subscribe/rss dy 订阅rss频道
 
   ctx.command('rss/rsschannel.list', '展示订阅的频道列表')
     .alias('rss/rsschannel.列表')
+    .alias('rss.list')
+    .alias('rss.列表')
     .action(() => {
       const list = channelList.map(channel => {
         return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`;
@@ -262,7 +268,7 @@ rss subscribe/rss dy 订阅rss频道
     ctx.broadcast(temp, message);
   }
   async function spliceRssItems(rssItems: RssItem[]) {
-    const temp = (await Promise.all(rssItems.map(item => rssDiv(item)))).join("");
+    const temp = (await Promise.all(rssItems.map(item => rssDiv(item)))).join("<hr>");
     return render(temp, 480);
   }
   async function broadcastNews() {
@@ -332,8 +338,9 @@ rss subscribe/rss dy 订阅rss频道
   async function rssDiv(rssItem: RssItem) {
     const channel = `<h2>#${rssItem.id}:${(await getChannelFromItem(rssItem)).title}</h2>`;
     const title = `<h3>${rssItem.title}</h3>`;
-    const description = rssItem.description;
-    return `<div>${channel}${title}${description}</div>`;
+    const description = `<div>${rssItem.description}</div>`;
+    const date = `<div style='font-size:12px; color:gray;' >${rssItem.pubDate}</div>`;
+    return `<div>${channel}${title}${description}${date}</div>`;
   }
   async function render(content: string, picWidth: number) {
     // https://github.com/ifrvn/koishi-plugin-send-as-image
