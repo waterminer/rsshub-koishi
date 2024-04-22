@@ -1,5 +1,5 @@
 import { RssChannel } from './rssChannel'
-import { Context } from 'koishi';
+import { Context, Logger } from 'koishi';
 export interface RssItem {
     id: number;
     cid: number;
@@ -17,7 +17,7 @@ export type RawRssItem = {
     guid: { _text: string },
     link: { _text: string },
     pubDate: { _text: string },
-    category: { _text: string }[]
+    category: { _text: string }[]|{ _text: string };
 }
 
 export async function CreateRssItem(ctx: Context, item: RawRssItem, channel: RssChannel): Promise<RssItem> {
@@ -35,7 +35,13 @@ export async function CreateRssItem(ctx: Context, item: RawRssItem, channel: Rss
         } else if (item.description._text) {
             description = item.description._text;
         }
-        if (item.category) category = item.category.map(text => text._text);
+        if (item.category) {
+            if(Array.isArray(item.category)) {
+                category = item.category.map(text => text._text);
+            }else{
+                category.push(item.category);
+            }
+        }
         return ctx.database.create('RssItem', {
             cid: channel.id,
             title: title,

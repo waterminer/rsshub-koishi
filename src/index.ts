@@ -1,4 +1,4 @@
-import { Context, Schema, Session } from 'koishi';
+import { $, Context, Schema, Session } from 'koishi';
 import { } from 'koishi-plugin-puppeteer';
 import { RssChannel, RssChannelType, factoryBuilder, Deliver } from './rssChannel';
 import { RssItem, RawRssItem, CreateRssItem } from './rssItem';
@@ -60,19 +60,25 @@ export function apply(ctx: Context, config: Config) {
     }
   });
 
-  ctx.command('rss/rsschannel.subscribe [guildId:text]','订阅频道')
+  ctx.command('rss/rsschannel.subscribe [guildId:text]', '订阅频道')
     .alias('rss.subscribe')
     .alias('rss.订阅')
     .alias('rss.dy')
-    .option('[guildId:text]','设定推送的群')
-    .usage('默认包含发送订阅指令的当前群\n以逗号间隔群号')
+    .option('no-default', '-d 不包含发送指令的当前群')
+    .usage('默认包含发送订阅指令的当前群\n结尾加上推送的目标群，以英文逗号间隔群号')
     .example('rsschannel subscribe 12345,54321')
-    .action(async ({ session }, guildId) => {
+    .action(async ({ session, options }, guildId) => {
+      const ui = new UI(session)
+      let channel: RssChannel = undefined;
       try {
-        const ui = new UI(session)
-        const deliver: Deliver = ui.getDeliver(guildId);
+        const deliver: Deliver = ui.getDeliver(guildId, options['no-default']);
         const type = await ui.queryType();
-        const channel = await subscribeRssChannel(session, type, deliver);
+        channel = await subscribeRssChannel(session, type, deliver);
+      } catch (error) {
+        logger.error(error);
+        return '订阅失败';
+      }
+      try {
         session.send(`频道${channel.title}订阅成功！\n请问需要立刻发送该频道最新的5条信息吗？\n1.是\n2.否`);
         let value = await ui.checkMenuInput(2, 1);
         let message = "";
@@ -95,9 +101,13 @@ export function apply(ctx: Context, config: Config) {
         }
         return message;
       } catch (error) {
-        logger.error(error);
+        if (error instanceof Error) {
+          logger.error(error.message);
+          return (error.message);
+        } else {
+          logger.error(error);
+        }
       }
-      return '订阅失败';
     });
 
   ctx.command('rss/rssitem.get <id:number>').alias('rss.查看').action(async ({ session }, id) => {
@@ -113,6 +123,23 @@ export function apply(ctx: Context, config: Config) {
     }
   });
 
+  ctx.command('rss/rssitem.list <cid:number> [page:number]')
+    .alias('rss/rssitem.列表')
+    .action(async ({ session }, cid, page) => {
+      if (!cid) return "指令错误,请输入频道ID";
+      if (!page || page <= 0) page = 1;
+      const res: RssItem[] = await ctx.database.select('RssItem')
+        .where({ cid: cid })
+        .limit(10)
+        .offset(10 * (page - 1))
+        .execute();
+      const itemText: string = res.map(item =>
+        `<tr><td>${item.id}</td><td>${item.title}</td></tr>`
+      ).join("");
+      const text = `<p>项目列表</p><table border=0><tr><td>序号</td><td>标题</td></tr>${itemText}</table>`;
+      return render(text, 250);
+    });
+
   ctx.command('rss/rsschannel.list').alias('rss/rsschannel.列表').action(() => {
     const list = channelList.map(channel => {
       return `<tr><td>${channel.id}</td><td>${channel.title}</td></tr>`;
@@ -121,7 +148,9 @@ export function apply(ctx: Context, config: Config) {
     return render(text, 250);
   });
 
-  ctx.command('rss/rsschannel.remove <id:number>').alias('rss/rsschannel.删除').action(async ({ session }, id) => {
+  ctx.command('rss/rsschannel.remove <id:number>')
+  .alias('rss/rsschannel.删除')
+  .action(async ({ session }, id) => {
     if (!id) return "指令错误,请输入频道ID";
     const sqlResult = await ctx.database.get('RssChannel', id);
     if (sqlResult.length == 0) return "频道不存在，请检查输入！";
@@ -130,34 +159,45 @@ export function apply(ctx: Context, config: Config) {
     try {
       let value = await session.prompt(config.TimeOut);
       if (value === "确认") {
+        ctx.database.remove('RssItem',{cid:id});
         ctx.database.remove('RssChannel', id);
+        channelList = await ctx.database.get('RssChannel', {});
         return `“${channel.title}”删除成功！`;
       }
     } catch (error) { }
     return "删除取消";
   });
 
-  ctx.command('rss/rsschannel.edit <id:number> <guildId:text>')
+  ctx.command('rss/rsschannel.edit <id:number> <guildId:text>', "修改推送目标群")
     .alias('rss/rsschannel.编辑')
-    .action(async ({ session }, id, guildId) => {
-      if (!id || !guildId) return "指令错误";
-      const sqlResult = await ctx.database.get('RssChannel', id);
-      if (sqlResult.length == 0) return "频道不存在，请检查输入！";
-      const channel = sqlResult.pop();
-      const ui = new UI(session);
-      let deliver: Deliver = ui.getDeliver(guildId);
-      ctx.database.set('RssChannel', id, {
-        deliver: deliver
-      });
-      return "修改完成！";
+    .option('no-default', '-d 不包含发送指令的当前群')
+    .action(async ({ session, options }, id, guildId) => {
+      try {
+        if (!id || !guildId) return "指令错误";
+        const sqlResult = await ctx.database.get('RssChannel', id);
+        if (sqlResult.length == 0) return "频道不存在，请检查输入！";
+        const channel = sqlResult.pop();
+        const ui = new UI(session);
+        let deliver: Deliver = ui.getDeliver(guildId, options['no-default']);
+        ctx.database.set('RssChannel', id, {
+          deliver: deliver
+        });
+        return "修改完成！";
+      } catch (error) {
+        if (error instanceof Error) {
+          logger.error(error.message);
+          return (error.message);
+        } else {
+          logger.error(error);
+        }
+      }
     });
 
-  ctx.timer.setInterval(broadcastNews, config.Cycle)
+  ctx.timer.setInterval(broadcastNews, config.Cycle);
 
   ctx.on('ready', async () => {
-    let listFromDatabase = await ctx.database.get('RssChannel', {});
-    channelList = listFromDatabase;
-    logger.info(`从数据库中加载了${listFromDatabase.length}个频道`);
+    channelList = await ctx.database.get('RssChannel', {});
+    logger.info(`从数据库中加载了${channelList.length}个频道`);
   })
 
   function broadcast(deliver: Deliver, message: string) {
@@ -190,15 +230,19 @@ export function apply(ctx: Context, config: Config) {
       this.session = session;
     }
 
-    getDeliver(rawGuildId?: string): Deliver {
+    getDeliver(rawGuildId?: string, selfDeliver = false): Deliver {
+      let deliver: Deliver = []
       const platform = this.session.platform;
-      let deliver: Deliver = [{ platform: platform, guildId: this.session.channelId }];
+      if (!selfDeliver) {
+        deliver.push({ platform: platform, guildId: this.session.channelId });
+      }
       if (rawGuildId) {
         const guildIds = rawGuildId.split(',');
         guildIds.forEach(guildId => {
           deliver.push({ platform: platform, guildId: guildId })
         })
       }
+      if (!rawGuildId && selfDeliver) throw new Error("-d 时必须要指定目标群聊")
       return deliver
     }
 
