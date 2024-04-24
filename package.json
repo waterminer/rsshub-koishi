@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-rsshub-koishi",
   "description": "一个基于rsshub的rss订阅/推送插件",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
