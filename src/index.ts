@@ -28,7 +28,7 @@ export const Config: Schema<Config> = Schema.object({
 });
 
 export function apply(ctx: Context, config: Config) {
-  const rsshubServerUrl = lib.checkUrl(config.RssHubServerUrl);
+  const rsshubServerUrl = config.RssHubServerUrl;
   const mainDoc =
     `
 ====rsshub订阅推送插件帮助====
@@ -315,11 +315,6 @@ rss 列表/rss list 订阅的频道列表
       throw new Error('输入错误');
     }
 
-    async checkUrlInput(): Promise<string> {
-      const url: string = await this.session.prompt(config.TimeOut);
-      return lib.checkUrl(url)
-    }
-
     async queryType(): Promise<number> {
       const typeMenu = lib.enumToList(RssChannelType);
       const max = typeMenu.length - 1;
@@ -327,11 +322,6 @@ rss 列表/rss list 订阅的频道列表
         `频道订阅向导\n请输入你订阅的频道类型[0~${typeMenu.length - 1}]:\n${typeMenu.join('\n')}`
       );
       return await this.checkMenuInput(max);
-    }
-
-    async queryUrl() {
-      this.session.send(`请输入地址`);
-      return this.checkUrlInput()
     }
 
   }

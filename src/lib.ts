@@ -53,17 +53,6 @@ export function enumToList(enumObject: EnumObject): string[] {
     const list = keys.map((key, index) => `${key}: ${values[index]}`);
     return list;
 }
-export function checkUrl(url: string): string {
-    const rule = /^((http:\/\/)|(https:\/\/))?((www\.)|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|(localhost)|(rsshub)|(yangzhi))\S*/g;
-    let res = rule.exec(url);
-    if (res) {
-        if (!res[1]) {
-            return 'http://' + res[0];
-        }
-        return res[0];
-    }
-    throw new Error('这不是有效的链接');
-}
 
 export async function newDownloadText(ctx: Context, url: string) {
     const decoder = new TextDecoder('utf-8');
@@ -81,5 +70,5 @@ export async function newDownloadImage(ctx: Context, url: string) {
 }
 
 export default {
-    checkUrl, downloadImg, downloadText, downloadToJson, enumToList, koishiDownloadJson
+    downloadImg, downloadText, downloadToJson, enumToList, koishiDownloadJson
 }
