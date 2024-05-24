@@ -1,8 +1,11 @@
 import { Context, Session } from 'koishi';
 import connect from './lib';
+import { title } from 'process';
+import { error } from 'console';
 export enum RssChannelType {
     customize = 0,
-    pixiv = 1
+    pixiv = 1,
+    twitter = 2
 }
 
 export type Deliver = { platform: string, guildId: string }[]
@@ -31,13 +34,18 @@ class PixivChannelArgs implements RssChannelArgs {
     mode: string = '';
 }
 
+class TwitterChannelArgs implements RssChannelArgs {
+    user_name: string = '';
+    type: string = '';
+}
+
 abstract class ChannelFactory {
     ctx: Context;
     constructor(ctx: Context) {
         this.ctx = ctx;
     }
     abstract createChannel(url: string, args: RssChannelArgs, deliver: Deliver): Promise<RssChannel>;
-    abstract printMenu(session: Session, TimeOut: number): Promise<RssChannelArgs>;
+    abstract printMenu(session: Session, timeOut: number): Promise<RssChannelArgs>;
     async getRssTitle(url: string): Promise<string> {
         const jsonDoc = await this.checkUrl(url);
         const title = jsonDoc.rss.channel.title;
@@ -49,6 +57,13 @@ abstract class ChannelFactory {
         const jsonDoc = (await connect.koishiDownloadJson(this.ctx, url));
         if (!jsonDoc.rss) throw new Error('这不是一个有效的rss订阅链接');
         return jsonDoc;
+    }
+    async checkMenuInput(max: number, session: Session, timeOut: number): Promise<number> {
+        const value: string = await session.prompt(timeOut);
+        if (!isNaN(Number(value)) && Number(value) <= max && Number(value) > 0) {
+            return Number(value);
+        }
+        throw new Error('inputErr');
     }
 }
 
@@ -93,13 +108,6 @@ class PixivChannelFactory extends ChannelFactory {
         if (!value) throw new Error(`Error Parameters:(${value})`);
     }
     async printMenu(session: Session, timeOut: number): Promise<PixivChannelArgs> {
-        async function checkMenuInput(max: number): Promise<number> {
-            const value: string = await session.prompt(timeOut);
-            if (!isNaN(Number(value)) && Number(value) <= max && Number(value) > 0) {
-                return Number(value);
-            }
-            throw new Error('inputErr');
-        }
         let args = new PixivChannelArgs()
         let typeMap = new Map<number, string>(
             this.TYPELIST.map((element, index) => [index + 1, element])
@@ -108,8 +116,8 @@ class PixivChannelFactory extends ChannelFactory {
             this.RANKLIST.map((element, index) => [index + 1, element])
         );
         session.send(`请选择类型:\n1.用户动态\n2.用户收藏\n3.关键词\n4.排行榜`);
-        let value = await checkMenuInput(this.TYPELIST.length);
-        args.type = typeMap.get(value)
+        let value = await this.checkMenuInput(this.TYPELIST.length, session, timeOut);
+        args.type = typeMap.get(value);
         switch (value) {
             case 1: {
                 session.send('请输入用户ID(uid)');
@@ -125,7 +133,7 @@ class PixivChannelFactory extends ChannelFactory {
                 break;
             } case 4: {
                 session.send('请输入排行榜类型:\n1.日榜\n2.周榜\n3.月榜');
-                const value = await checkMenuInput(this.RANKLIST.length);
+                const value = await this.checkMenuInput(this.RANKLIST.length, session, timeOut);
                 args.mode = modeMap.get(value);
                 break;
             } default:
@@ -158,17 +166,76 @@ class PixivChannelFactory extends ChannelFactory {
                 url = rssHubServerUrl + `/pixiv/user/illustfollows`;
                 break;
             } default: {
-                throw new Error("");
+                throw new Error("inputErr");
             }
         }
-        const title = await this.getRssTitle(url)
+        const title = await this.getRssTitle(url);
         return this.ctx.database.create('RssChannel', {
             type: RssChannelType.pixiv,
             deliver: deliver,
             title: title,
             url: url,
             args: args
-        })
+        });
+    }
+}
+
+class TwitterChannelFactory extends ChannelFactory {
+    constructor(ctx: Context) {
+        super(ctx);
+    }
+    readonly TYPELIST: ReadonlyArray<string> = [
+        'user_time_line',
+        'user_media'
+    ];
+    async createChannel(rssHubServerUrl: string, args: TwitterChannelArgs, deliver: Deliver): Promise<RssChannel> {
+        let url = '';
+        switch (args.type) {
+            case "user_time_line": {
+                url = rssHubServerUrl + `/twitter/user/${args.user_name}`;
+                break;
+            }
+            case "user_media": {
+                url = rssHubServerUrl + `/twitter/media/${args.user_name}`;
+                break;
+            }
+            default: {
+                throw new Error('inputErr');
+            }
+        }
+        const title = await this.getRssTitle(url);
+        return this.ctx.database.create('RssChannel', {
+            type: RssChannelType.twitter,
+            deliver: deliver,
+            title: title,
+            url: url,
+            args: args
+        });
+    }
+    async printMenu(session: Session, timeOut: number): Promise<RssChannelArgs> {
+        let args = new TwitterChannelArgs();
+        let typeMap = new Map<number, string>(
+            this.TYPELIST.map((element, index) => [index + 1, element])
+        );
+        session.send(`请选择类型:\n1.用户动态\n2.用户媒体`);
+        let value = await this.checkMenuInput(this.TYPELIST.length, session, timeOut);
+        args.type = typeMap.get(value);
+        switch (value) {
+            case 1: {
+                session.send('请输入用户名(推特‘@’后面的字母)');
+                args.user_name = await session.prompt(timeOut);
+                break;
+            }
+            case 2: {
+                session.send('请输入用户名(推特‘@’后面的字母)');
+                args.user_name = await session.prompt(timeOut);
+                break;
+            }
+            default: {
+                throw new Error("inputErr");
+            }
+        }
+        return args;
     }
 }
 
@@ -178,6 +245,8 @@ export function factoryBuilder(ctx: Context, type: RssChannelType): ChannelFacto
             return new customizeChannelFactory(ctx);
         case RssChannelType.pixiv:
             return new PixivChannelFactory(ctx);
+        case RssChannelType.twitter:
+            return new TwitterChannelFactory(ctx);
         default:
             throw new Error("");
     }
