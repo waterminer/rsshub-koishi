@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-rsshub-koishi",
   "description": "一个基于rsshub的rss订阅/推送插件",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -25,7 +25,7 @@
     "rss"
   ],
   "peerDependencies": {
-    "koishi": "^4.17.4"
+    "koishi": "^4.17.8"
   },
   "dependencies": {
     "koishi-plugin-puppeteer": "^3.8.4",
