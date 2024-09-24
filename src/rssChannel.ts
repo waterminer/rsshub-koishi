@@ -1,7 +1,6 @@
 import { Context, Session } from 'koishi';
 import connect from './lib';
-import { title } from 'process';
-import { error } from 'console';
+
 export enum RssChannelType {
     customize = 0,
     pixiv = 1,

@@ -8,20 +8,25 @@ class HTMLError extends Error {
 }
 
 async function tryFetch(promise: Promise<Response>, retry: number = 3): Promise<Response> {
-    while (retry > 0) {
+    while (retry >= 0) {
         try {
             const response = await promise;
             if (response.ok) {
                 return response;
             } else throw new HTMLError(response);
         } catch (error) {
-            retry--;
-            if (error instanceof Error) console.error(error.message + ",retry:" + retry);
-            else console.error("Unknown Error!");
+            if (retry > 0){
+                if (error instanceof Error) {
+                    console.error(error.message + ",retry:" + retry);
+                    retry--;
+                }
+                else console.error("Unknown Error!");
+            }
         }
     }
     throw new Error("FetchError");
 }
+
 
 async function downloadImg(url: string): Promise<Blob> {
     try {
@@ -56,17 +61,32 @@ export function enumToList(enumObject: EnumObject): string[] {
 
 export async function newDownloadText(ctx: Context, url: string) {
     const decoder = new TextDecoder('utf-8');
-    return decoder.decode(await ctx.http.get(url));
+    let res:string|null = null
+    try{
+        res = decoder.decode(await ctx.http.get(url));
+    }catch(error){
+        
+    }
+    return res
 }
 
 export async function koishiDownloadJson(ctx: Context, url: string) {
     let XMLDoc = await newDownloadText(ctx, url);
-    return JSON.parse(xmlConvert.xml2json(XMLDoc, { compact: true }));
+    if(XMLDoc){
+        return JSON.parse(xmlConvert.xml2json(XMLDoc, { compact: true }));
+    }else{
+        return null
+    }
 }
 
 export async function newDownloadImage(ctx: Context, url: string) {
-    let binary: ArrayBuffer = await ctx.http.get(url);
-    return new Blob([binary]);
+    let binary_data = null
+    try{
+        binary_data: ArrayBuffer = await ctx.http.get(url);
+    }catch(error){
+        ctx.logger.error(error)
+    }
+    return new Blob([binary_data]);
 }
 
 export default {

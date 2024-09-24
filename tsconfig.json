@@ -2,14 +2,15 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib",
-    "target": "es2022",
-    "module": "commonjs",
+    "target": "ES2022",
+    "module": "ESNext",
     "declaration": true,
     "composite": true,
     "incremental": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "emitDeclarationOnly": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@satorijs/element",
     "types": [

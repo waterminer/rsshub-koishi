@@ -212,22 +212,22 @@ rss 列表/rss list 订阅的频道列表
       return "删除取消";
     });
 
-  ctx.command('rss/rsschannel.deliver <id:number>',"显示频道的推送目标")
-  .alias('rss/rsschannel.推送目标')
-  .action(async ({session},id) => {
-    if(!id) return "指令错误,请输入频道ID";
-    try {
-      const channel = (await ctx.database.get('RssChannel',id)).pop();
-      const res = channel.deliver.map((element)=>`${element.platform}:${element.guildId}`);
-      const text = `推送列表:<br>${res.join("<br>")}`;
-      return render(text,250);
-    } catch (error) {
-      logger.error(error)
-      if(error instanceof Error){
-        return(`错误:\n${error.message}`)
+  ctx.command('rss/rsschannel.deliver <id:number>', "显示频道的推送目标")
+    .alias('rss/rsschannel.推送目标')
+    .action(async ({ session }, id) => {
+      if (!id) return "指令错误,请输入频道ID";
+      try {
+        const channel = (await ctx.database.get('RssChannel', id)).pop();
+        const res = channel.deliver.map((element) => `${element.platform}:${element.guildId}`);
+        const text = `推送列表:<br>${res.join("<br>")}`;
+        return render(text, 250);
+      } catch (error) {
+        logger.error(error)
+        if (error instanceof Error) {
+          return (`错误:\n${error.message}`)
+        }
       }
-    }
-  });
+    });
 
   ctx.command('rss/rsschannel.deliverto <id:number> <guildId:text>', "修改推送目标群")
     .alias('rss/rsschannel.推送设置')
@@ -377,15 +377,19 @@ rss 列表/rss list 订阅的频道列表
 
   async function createRssItemList(channel: RssChannel): Promise<RssItem[]> {
     const jsonObject = await lib.koishiDownloadJson(ctx, channel.url)
-    const items: RawRssItem[] = jsonObject.rss.channel.item;
     const newItems: RawRssItem[] = [];
-    for (const item of items) {
-      const archivedItems = await ctx.database.get('RssItem', { guid: item.guid._text });
-      if (archivedItems.length == 0) {
-        newItems.push(item);
+    if (jsonObject) {
+      const items: RawRssItem[] = jsonObject.rss.channel.item;
+      for (const item of items) {
+        const archivedItems = await ctx.database.get('RssItem', { guid: item.guid._text });
+        if (archivedItems.length == 0) {
+          newItems.push(item);
+        }
       }
     }
-    logger.debug(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`);
+    if (newItems.length != 0) {
+      logger.info(`更新了‘${channel.title}’频道下的${newItems.length}个条目！`);
+    }
     return Promise.all(newItems.map(item => CreateRssItem(ctx, item, channel)));
   }
 
@@ -398,13 +402,15 @@ rss 列表/rss list 订阅的频道列表
   }
 
   async function checkForUpdates(): Promise<{ channel: RssChannel, items: RssItem[] }[]> {
-    logger.info('开始更新');
+    logger.debug(`开始更新,更新时间于${Date().toString()}`);
     let res = await Promise.all(channelList.map(async (channel: RssChannel) => {
       const items = await createRssItemList(channel);
       return { channel, items };
     }))
     res = res.filter(element => element.items.length != 0);
-    logger.info(`更新了${res.length}个频道`)
+    if (res.length != 0) {
+      logger.info(`更新了${res.length}个频道`)
+    }
     return res;
   }
 }
